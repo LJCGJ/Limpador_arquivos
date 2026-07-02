@@ -24,4 +24,9 @@
       <Filter>Arquivos de Cabeçalho</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="logo.png">
+      <Filter>Arquivos de Cabeçalho</Filter>
+    </Image>
+  </ItemGroup>
 </Project>
