@@ -88,6 +88,7 @@ namespace LimpezaSistema {
 		Button^ btnAbrir;
 		Button^ btnLixeira;
 		Button^ btnCsv;
+		Button^ btnCancelar;
 		Label^ lblStatus;
 		ProgressBar^ progressBar;
 		System::ComponentModel::BackgroundWorker^ worker;
@@ -199,15 +200,20 @@ namespace LimpezaSistema {
 			// Barra de progresso (escondida ate iniciar a busca)
 			progressBar = gcnew ProgressBar();
 			progressBar->Location = Point(20, 640);
-			progressBar->Size = System::Drawing::Size(960, 16);
+			progressBar->Size = System::Drawing::Size(820, 16);
 			progressBar->Minimum = 0;
 			progressBar->Maximum = 100;
 			progressBar->Style = ProgressBarStyle::Continuous;
 			progressBar->Visible = false;
 
+			btnCancelar = NovoBotao(L"Cancelar", 850, 632, 130, 26, Color::Firebrick, Color::White);
+			btnCancelar->Click += gcnew EventHandler(this, &MyForm::btnCancelar_Click);
+			btnCancelar->Visible = false;
+
 			// BackgroundWorker: roda a varredura em outra thread
 			worker = gcnew System::ComponentModel::BackgroundWorker();
 			worker->WorkerReportsProgress = true;
+			worker->WorkerSupportsCancellation = true;
 			worker->DoWork += gcnew System::ComponentModel::DoWorkEventHandler(this, &MyForm::worker_DoWork);
 			worker->ProgressChanged += gcnew System::ComponentModel::ProgressChangedEventHandler(this, &MyForm::worker_ProgressChanged);
 			worker->RunWorkerCompleted += gcnew System::ComponentModel::RunWorkerCompletedEventHandler(this, &MyForm::worker_Completed);
@@ -240,6 +246,7 @@ namespace LimpezaSistema {
 			this->Controls->Add(btnCsv);
 			this->Controls->Add(lblStatus);
 			this->Controls->Add(progressBar);
+			this->Controls->Add(btnCancelar);
 
 			this->ResumeLayout(false);
 		}
@@ -475,8 +482,17 @@ namespace LimpezaSistema {
 			DesabilitarBotoes(true);
 			progressBar->Value = 0;
 			progressBar->Visible = true;
+			btnCancelar->Visible = true;
 			this->Cursor = Cursors::WaitCursor;
 			worker->RunWorkerAsync();
+		}
+
+		System::Void btnCancelar_Click(System::Object^ sender, System::EventArgs^ e) {
+			if (worker->IsBusy) {
+				worker->CancelAsync();
+				btnCancelar->Enabled = false;
+				lblStatus->Text = L"Cancelando...";
+			}
 		}
 
 		void worker_DoWork(System::Object^ sender, System::ComponentModel::DoWorkEventArgs^ e) {
@@ -494,6 +510,7 @@ namespace LimpezaSistema {
 			raizes->Add(Environment::GetFolderPath(Environment::SpecialFolder::Desktop));
 			FiltroArquivo^ f = gcnew FiltroArquivo(this, &MyForm::FiltroMidia);
 			for (int i = 0; i < raizes->Count; i++) {
+				if (bw->CancellationPending) { return; }
 				bw->ReportProgress((int)(100.0 * i / raizes->Count), L"Varrendo: " + raizes[i]);
 				VarrerPasta(raizes[i], f);
 			}
@@ -519,6 +536,7 @@ namespace LimpezaSistema {
 			caminhos->Add(ObterDownloads()); filtros->Add(dl);
 
 			for (int i = 0; i < caminhos->Count; i++) {
+				if (bw->CancellationPending) { return; }
 				bw->ReportProgress((int)(100.0 * i / caminhos->Count), L"Varrendo: " + caminhos[i]);
 				VarrerPasta(caminhos[i], filtros[i]);
 			}
@@ -548,6 +566,7 @@ namespace LimpezaSistema {
 			int total = dirs->Count; if (total < 1) total = 1;
 			int feito = 0;
 			for each (String ^ dir in dirs) {
+				if (bw->CancellationPending) { return; }
 				feito++;
 				bw->ReportProgress((int)(100.0 * feito / total), L"Analisando: " + dir);
 				String^ nome = Path::GetFileName(dir);
@@ -573,10 +592,13 @@ namespace LimpezaSistema {
 		void worker_Completed(System::Object^ sender, System::ComponentModel::RunWorkerCompletedEventArgs^ e) {
 			OrdenarPorTamanho();
 			PopularLista();
-			progressBar->Value = 100;
 			progressBar->Visible = false;
+			btnCancelar->Visible = false;            // esconder
+			btnCancelar->Enabled = true;             // reabilitar para a proxima busca
 			DesabilitarBotoes(false);
 			this->Cursor = Cursors::Default;
+			if (e->Cancelled)
+				lblStatus->Text = String::Format(L"Busca cancelada. {0} item(ns) encontrados ate aqui.", _itens->Count);
 		}
 
 		// =====================================================================
